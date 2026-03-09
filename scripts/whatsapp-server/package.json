@@ -1,0 +1,17 @@
+{
+  "name": "whatsapp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.5",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "pino": "^8.17.0",
+    "qrcode": "^1.5.4"
+  }
+}
