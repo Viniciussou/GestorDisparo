@@ -70,8 +70,8 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
   const [selectedClients, setSelectedClients] = useState<string[]>([])
   const [clientSearchTerm, setClientSearchTerm] = useState('')
   const [isConnecting, setIsConnecting] = useState<string | null>(null)
-  const [qrCode, setQrCode] = useState<string | null>(null)
-  const [qrImage, setQrImage] = useState<string | "loading" | null>(null)
+  const [qrImage, setQrImage] = useState<string | null>(null)
+  const [isLoadingQR, setIsLoadingQR] = useState(false)
   const [connectingPhone, setConnectingPhone] = useState<string | null>(null)
   const [isDebugMode, setIsDebugMode] = useState(false)
 
@@ -613,18 +613,10 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* QR Code Modal */}
-      <Dialog
-        open={qrImage !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            isCancelled.current = true
-            setQrCode(null)
-            setQrImage(null)
-            setIsConnecting(null)
-            setConnectingPhone(null)
-          }
-        }}
-      >
+      <Dialog open={qrImage !== null} onClose={() => setQrImage(null)}>
+        {isLoadingQR && <p>Gerando QR Code...</p>}
+        {qrImage && <img src={qrImage} alt="QR Code" />}
+      </Dialog>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
