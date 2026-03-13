@@ -129,13 +129,13 @@ export async function POST(request: NextRequest) {
     const baileysServerUrl = process.env.BAILEYS_SERVER_URL
     if (baileysServerUrl) {
       try {
-        await fetch(`${baileysServerUrl}/api/sessions/init`, {
+        await fetch(`${baileysServerUrl}/api/connect`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${process.env.BAILEYS_SERVER_SECRET}`
           },
-          body: JSON.stringify({ session_id: session.id, user_id: user.id })
+          body: JSON.stringify({ session_id: session.id, user_id: user.id, phone_number: normalizedPhone })
         })
       } catch (e) {
         console.error('Failed to notify Baileys server:', e)

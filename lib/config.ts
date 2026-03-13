@@ -8,32 +8,33 @@ export const BAILEYS_API_URL =
   process.env.NEXT_PUBLIC_BAILEYS_SERVER_URL || 
   'https://api-1-ft6j.onrender.com'
 
-// API Endpoints
+// API Endpoints - For Baileys Backend
 export const API_ENDPOINTS = {
-  // Sessions
-  SESSIONS: `${BAILEYS_API_URL}/api/sessions`,
-  SESSION: (id: string) => `${BAILEYS_API_URL}/api/sessions/${id}`,
-  SESSION_CONNECT: (id: string) => `${BAILEYS_API_URL}/api/sessions/${id}/connect`,
-  SESSION_DISCONNECT: (id: string) => `${BAILEYS_API_URL}/api/sessions/${id}/disconnect`,
-  SESSION_QR: (id: string) => `${BAILEYS_API_URL}/api/sessions/${id}/qr`,
+  // Frontend API Routes (for client-side calls)
+  SESSIONS: '/api/sessions',
+  SESSION: (id: string) => `/api/sessions/${id}`,
+  SESSION_CONNECT: (id: string) => `/api/sessions/${id}/connect`,
+  
+  CONTACTS: '/api/contacts',
+  CONTACT: (id: string) => `/api/contacts/${id}`,
 
-  // Contacts
-  CONTACTS: `${BAILEYS_API_URL}/api/contacts`,
-  CONTACT: (id: string) => `${BAILEYS_API_URL}/api/contacts/${id}`,
+  DISPATCH: '/api/dispatch',
+  DISPATCH_LOGS: '/api/dispatch/logs',
+  DISPATCH_STATS: (period: string) => `/api/dispatch/stats?period=${period}`,
 
-  // Dispatch
-  DISPATCH: `${BAILEYS_API_URL}/api/dispatch`,
-  DISPATCH_LOGS: `${BAILEYS_API_URL}/api/dispatch/logs`,
-  DISPATCH_STATS: (period: string) => `${BAILEYS_API_URL}/api/dispatch/stats?period=${period}`,
+  CONVERSATIONS: '/api/conversations',
+  CONVERSATION_MESSAGES: (jid: string) => `/api/conversations/${jid}/messages`,
+  MESSAGES: '/api/messages',
 
-  // Conversations/Messages
-  CONVERSATIONS: `${BAILEYS_API_URL}/api/conversations`,
-  CONVERSATION_MESSAGES: (jid: string) => `${BAILEYS_API_URL}/api/conversations/${jid}/messages`,
-  MESSAGES: `${BAILEYS_API_URL}/api/messages`,
+  TEMPLATES: '/api/templates',
+  TEMPLATE: (id: string) => `/api/templates/${id}`,
 
-  // Templates
-  TEMPLATES: `${BAILEYS_API_URL}/api/templates`,
-  TEMPLATE: (id: string) => `${BAILEYS_API_URL}/api/templates/${id}`,
+  // Baileys Backend Endpoints (for server-side calls)
+  BAILEYS_CONNECT: `${BAILEYS_API_URL}/api/connect`,
+  BAILEYS_DISCONNECT: `${BAILEYS_API_URL}/api/disconnect`,
+  BAILEYS_SEND: `${BAILEYS_API_URL}/api/send`,
+  BAILEYS_SEND_BULK: `${BAILEYS_API_URL}/api/send-bulk`,
+  BAILEYS_STATUS: (phone: string) => `${BAILEYS_API_URL}/api/status?phone=${phone}`,
 }
 
 // API Headers

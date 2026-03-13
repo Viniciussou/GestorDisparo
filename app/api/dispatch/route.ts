@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user.id)
         .eq('is_active', true)
         .maybeSingle()
-        
+
       if (!template) {
         return NextResponse.json({ 
           error: 'Not found', 
@@ -252,29 +252,33 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < queueItems.length; i += batchSize) {
       const batch = queueItems.slice(i, i + batchSize)
-      const { error: insertError, count } = await supabase
+      const { error: insertError } = await supabase
         .from('dispatch_queue')
         .insert(batch)
-        .select('id', { count: 'exact', head: true })
+        .select('id')
 
       if (insertError) {
         console.error('Error inserting dispatch queue batch:', insertError)
       } else {
-        totalQueued += count || batch.length
+        totalQueued += batch.length
       }
     }
 
-    // Notify Baileys server to start processing
+    // Notify Baileys server to start processing bulk sends
     const baileysServerUrl = process.env.BAILEYS_SERVER_URL
     if (baileysServerUrl) {
       try {
-        await fetch(`${baileysServerUrl}/api/dispatch/process`, {
+        await fetch(`${baileysServerUrl}/api/send-bulk`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${process.env.BAILEYS_SERVER_SECRET}`
           },
-          body: JSON.stringify({ user_id: user.id })
+          body: JSON.stringify({ 
+            session_ids: body.session_ids,
+            contact_ids: body.contact_ids,
+            user_id: user.id 
+          })
         })
       } catch (e) {
         console.error('Failed to notify Baileys server:', e)

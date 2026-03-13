@@ -47,7 +47,7 @@ export async function POST(
     }
 
     try {
-      const response = await fetch(`${baileysServerUrl}/api/sessions/${id}/connect`, {
+      const response = await fetch(`${baileysServerUrl}/api/connect`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -119,12 +119,13 @@ export async function DELETE(
     const baileysServerUrl = process.env.BAILEYS_SERVER_URL
     if (baileysServerUrl) {
       try {
-        await fetch(`${baileysServerUrl}/api/sessions/${id}/disconnect`, {
+        await fetch(`${baileysServerUrl}/api/disconnect`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${process.env.BAILEYS_SERVER_SECRET}`
-          }
+          },
+          body: JSON.stringify({ session_id: id })
         })
       } catch (e) {
         console.error('Failed to notify Baileys server:', e)

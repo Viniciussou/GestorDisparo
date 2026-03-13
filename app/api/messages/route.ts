@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const response = await fetch(`${baileysServerUrl}/api/messages/send`, {
+      const response = await fetch(`${baileysServerUrl}/api/send`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
