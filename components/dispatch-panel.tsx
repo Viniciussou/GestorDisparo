@@ -253,6 +253,7 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
       }
     } catch {
       showToast('Erro ao desconectar', 'error')
+      console.error(error)
     }
   }
 
