@@ -13,18 +13,18 @@ function verifyWebhookSecret(request: NextRequest): boolean {
     request.headers.get('x-webhook-secret')
 
   // Support both BAILEYS_SERVER_SECRET and legacy SERVER_SECRET
-  const expectedSecret = 
-    process.env.BAILEYS_SERVER_SECRET || 
+  const expectedSecret =
+    process.env.BAILEYS_SERVER_SECRET ||
     process.env.SERVER_SECRET ||
     process.env.NEXT_PUBLIC_BAILEYS_SERVER_SECRET
-  
+
   if (!expectedSecret) {
     console.error('[Webhook] BAILEYS_SERVER_SECRET environment variable is not configured')
     return false
   }
 
   const isValid = secret === expectedSecret
-  
+
   if (!isValid) {
     console.error('[Webhook] Secret verification failed', {
       receivedSecret: secret ? '***' : 'missing',
@@ -32,7 +32,7 @@ function verifyWebhookSecret(request: NextRequest): boolean {
       secretSource: process.env.BAILEYS_SERVER_SECRET ? 'BAILEYS_SERVER_SECRET' : 'SERVER_SECRET'
     })
   }
-  
+
   return isValid
 }
 
@@ -49,6 +49,13 @@ export async function POST(request: NextRequest) {
   try {
     // Verify webhook authenticity
     const payload: WebhookPayload = await request.json()
+
+    if (!payload?.event) {
+      return NextResponse.json(
+        { error: "Invalid payload" },
+        { status: 400 }
+      )
+    }
     const supabase = await createClient()
 
     switch (payload.event) {
@@ -56,8 +63,8 @@ export async function POST(request: NextRequest) {
         // Update session status to connected
         const { error } = await supabase
           .from('whatsapp_sessions')
-          .update({ 
-            status: 'connected', 
+          .update({
+            status: 'connected',
             qr_code: null,
             auth_state: payload.data.auth_state as Record<string, unknown> || null,
             updated_at: new Date().toISOString()
@@ -74,7 +81,7 @@ export async function POST(request: NextRequest) {
         // Update session status to disconnected
         const { error } = await supabase
           .from('whatsapp_sessions')
-          .update({ 
+          .update({
             status: 'disconnected',
             updated_at: new Date().toISOString()
           })
@@ -87,11 +94,10 @@ export async function POST(request: NextRequest) {
       }
 
       case 'session.qr_update': {
-        // Update QR code for the session
         const { error } = await supabase
           .from('whatsapp_sessions')
-          .update({ 
-            qr_code: payload.data.qr_code as string,
+          .update({
+            qr_code: payload.data.qr_code,
             status: 'connecting',
             updated_at: new Date().toISOString()
           })
@@ -100,6 +106,7 @@ export async function POST(request: NextRequest) {
         if (error) {
           console.error('Error updating QR code:', error)
         }
+
         break
       }
 
@@ -216,7 +223,7 @@ export async function POST(request: NextRequest) {
         if (messageData.message_db_id) {
           await supabase
             .from('messages')
-            .update({ 
+            .update({
               status: messageData.status,
               message_id: messageData.message_id,
               error_message: messageData.error_message || null,
@@ -228,7 +235,7 @@ export async function POST(request: NextRequest) {
         // Update dispatch queue if this was a queued message
         if (payload.data.queue_id) {
           const queueId = payload.data.queue_id as string
-          
+
           // Get queue item details
           const { data: queueItem } = await supabase
             .from('dispatch_queue')
@@ -240,7 +247,7 @@ export async function POST(request: NextRequest) {
             // Update queue status
             await supabase
               .from('dispatch_queue')
-              .update({ 
+              .update({
                 status: messageData.status,
                 processed_at: new Date().toISOString()
               })
@@ -277,9 +284,9 @@ export async function POST(request: NextRequest) {
       case 'message.read': {
         // Update message status
         const messageData = payload.data as { message_id: string }
-        
+
         const status = payload.event === 'message.delivered' ? 'delivered' : 'read'
-        
+
         await supabase
           .from('messages')
           .update({ status, updated_at: new Date().toISOString() })
