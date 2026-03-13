@@ -2,28 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
-  Play,
-  Pause,
-  Plus,
-  Trash2,
-  Send,
-  Clock,
-  Phone,
-  MessageSquare,
-  Settings,
-  AlertCircle,
-  CheckCircle2,
-  History,
-  Users,
-  Wifi,
-  WifiOff,
-  RefreshCw,
-  QrCode,
-  X,
-  User,
-  Search,
-  Check,
-  AlertTriangle
+  Play, Pause, Plus, Trash2, Send, Clock, Phone, MessageSquare, Settings,
+  AlertCircle, CheckCircle2, History, Users, Wifi, WifiOff, RefreshCw,
+  QrCode, X, User, Search, Check, AlertTriangle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,14 +15,8 @@ import { useAppStore } from '@/lib/store'
 import { INTERVAL_OPTIONS } from '@/lib/types'
 import type { SenderNumber } from '@/lib/types'
 import {
-  getClientName,
-  getClientPhone,
-  getRandomMessage,
-  formatWhatsAppNumber,
-  formatPhone,
-  formatDateTime,
-  generateId,
-  hasStatus
+  getClientName, getClientPhone, getRandomMessage, formatWhatsAppNumber,
+  formatPhone, formatDateTime, generateId, hasStatus
 } from '@/lib/helpers'
 
 interface DispatchPanelProps {
@@ -106,40 +81,35 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
   // Poll for QR code
   const pollForQRCode = useCallback(async (sessionId: string, attemptCount: number = 0) => {
     const maxAttempts = 30
-  
     if (attemptCount >= maxAttempts) {
       showToast('Timeout aguardando QR code. Tente novamente.', 'error')
       setIsConnecting(null)
       setQrImage(null)
       setQrCode(null)
+      setConnectingPhone(null)
       return
     }
-  
+
     try {
       const response = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_qr', sessionId })
       })
-  
+
       const data = await response.json()
       console.log('QR polled:', { attemptCount, data })
-  
+
       if (data.data?.qr_code) {
         setQrImage(data.data.qr_code)
         setQrCode(data.data.qr_code)
         showToast('QR Code gerado! Escaneie agora.', 'success')
       } else {
-        // Aguardar 1s e chamar novamente
-        setTimeout(() => {
-          pollForQRCode(sessionId, attemptCount + 1)
-        }, 1000)
+        setTimeout(() => pollForQRCode(sessionId, attemptCount + 1), 1000)
       }
     } catch (error) {
       console.error('Erro no polling do QR:', error)
-      setTimeout(() => {
-        pollForQRCode(sessionId, attemptCount + 1)
-      }, 1000)
+      setTimeout(() => pollForQRCode(sessionId, attemptCount + 1), 1000)
     }
   }, [showToast])
 
@@ -153,10 +123,7 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
       const response = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'connect',
-          phoneNumber: phone
-        })
+        body: JSON.stringify({ action: 'connect', phoneNumber: phone })
       })
 
       const data = await response.json()
@@ -167,92 +134,110 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
           setIsDebugMode(true)
           setQrImage(data.data.qr_code)
           setQrCode(data.data.qr_code)
-          showToast(
-            'QR Code simulado gerado para debug. Use um número diferente.',
-            'error'
-          )
+          showToast('QR Code simulado gerado para debug.', 'error')
 
         } else if (data.data?.qr_code) {
           setIsDebugMode(false)
           setQrImage(data.data.qr_code)
           setQrCode(data.data.qr_code)
+          showToast('QR Code gerado! Escaneie com o WhatsApp.', 'success')
 
-          showToast(
-            'QR Code gerado! Escaneie com o WhatsApp.',
-            'success'
-          )
         } else if (data.data?.session_id) {
           // QR ainda não pronto, fazer polling
-          console.log('Session ID received, polling for QR...', data.data.session_id)
           setQrCode("loading")
           setQrImage("loading")
           pollForQRCode(data.data.session_id)
-
         } else if (data.connected) {
-
           setDispatchConfig({
             senderNumbers: dispatchConfig.senderNumbers.map(s =>
               s.phone === phone
-                ? {
-                  ...s,
-                  connected: true,
-                  lastActivity: new Date().toISOString()
-                }
+                ? { ...s, connected: true, lastActivity: new Date().toISOString() }
                 : s
             )
           })
-
-          showToast(
-            `Número ${formatPhone(phone)} já estava conectado!`,
-            'success'
-          )
-
+          showToast(`Número ${formatPhone(phone)} já estava conectado!`, 'success')
         } else {
-          showToast('Aguardando QR Code...', 'success');
+          showToast('Aguardando QR Code...', 'success')
         }
+
       } else {
 
         if (data.banned) {
-
-          showToast(
-            data.error || 'Número banido pelo WhatsApp',
-            'error'
-          )
-
-          if (data.suggestions) {
-            console.log('💡 Sugestões:')
-            data.suggestions.forEach((s: string, i: number) => {
-              console.log(`${i + 1}. ${s}`)
-            })
-          }
-
+          showToast(data.error || 'Número banido pelo WhatsApp', 'error')
         } else {
-
           showToast(data.error || 'Erro ao conectar', 'error')
-
         }
 
       }
 
     } catch (error) {
-
       console.error(error)
       showToast('Erro ao conectar com a API', 'error')
-
-    } 
+    }
   }
 
   // Desconectar número remetente
   const disconnectSender = async (phone: string) => {
     try {
-      const response = await fetch('/api/whatsapp', {
+      await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'disconnect',
-          phoneNumber: phone
-        })
+        body: JSON.stringify({ action: 'disconnect', phoneNumber: phone })
       })
+
+      setDispatchConfig({
+        senderNumbers: dispatchConfig.senderNumbers.map(s =>
+          s.phone === phone ? { ...s, connected: false } : s
+        )
+      })
+
+      showToast(`Número ${formatPhone(phone)} desconectado`, 'success')
+      setQrImage(null)
+      setQrCode(null)
+      setConnectingPhone(null)
+
+    } catch (error) {
+      console.error(error)
+      showToast('Erro ao desconectar número', 'error')
+    }
+  }
+
+  return (
+    <div className="p-4">
+      <h2 className="text-xl font-bold mb-4">Remetentes</h2>
+
+      {dispatchConfig.senderNumbers.map((sender) => (
+        <div key={sender.phone} className="mb-4 border p-2 rounded">
+          <div className="flex justify-between items-center">
+            <span>{sender.name} ({formatPhone(sender.phone)})</span>
+            {sender.connected ? (
+              <Button size="sm" variant="destructive" onClick={() => disconnectSender(sender.phone)}>
+                Desconectar
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => connectSender(sender.phone)}>
+                Conectar
+              </Button>
+            )}
+          </div>
+
+          {/* QR Code */}
+          {connectingPhone === sender.phone && (
+            <div className="mt-2">
+              {qrImage === "loading" ? (
+                <p className="text-center text-sm text-muted-foreground">Carregando QR Code...</p>
+              ) : qrImage ? (
+                <img src={qrImage} alt="QR Code WhatsApp" className="mx-auto w-64 h-64" />
+              ) : (
+                <p className="text-center text-sm text-muted-foreground">Aguardando QR Code...</p>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
 
       const data = await response.json()
 
