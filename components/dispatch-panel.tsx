@@ -251,7 +251,7 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
         })
         showToast(`Número ${formatPhone(phone)} desconectado!`, 'success')
       }
-    } catch {
+    } catch (error) {  // <--- precisa do "error" aqui
       showToast('Erro ao desconectar', 'error')
       console.error(error)
     }
