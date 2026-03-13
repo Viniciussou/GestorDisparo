@@ -2,6 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import type { WebhookPayload } from '@/lib/types'
 
+export async function GET() {
+  return Response.json({ status: "webhook alive" })
+}
+
 // Verify webhook secret
 function verifyWebhookSecret(request: NextRequest): boolean {
   const secret =
