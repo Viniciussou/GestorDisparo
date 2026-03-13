@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     // CONNECT
     if (action === "connect") {
 
-      const baileysResult = await tryBaileysServer(`/api/sessions`, {
+      const baileysResult = await tryBaileysServer(`/api/connect`, {
         method: "POST",
         body: JSON.stringify({
           phone_number: phoneNumber,
@@ -137,15 +137,15 @@ export async function POST(request: NextRequest) {
 
         sessions.set(phoneNumber, {
           connected: false,
-          qrCode: baileysResult.data?.qr_code || baileysResult.qr,
+          qrCode: baileysResult.qr || baileysResult.data?.qr_code,
           phoneNumber,
           lastActivity: new Date()
         })
 
         return NextResponse.json({
           success: true,
-          qr: baileysResult.data?.qr_code || baileysResult.qr,
-          sessionId: baileysResult.data?.id || phoneNumber
+          qr: baileysResult.qr || baileysResult.data?.qr_code,
+          sessionId: phoneNumber
         })
       }
 
@@ -158,48 +158,55 @@ export async function POST(request: NextRequest) {
     // GET QR
     if (action === "get_qr") {
 
-      const result = await tryBaileysServer(`/api/sessions/${sessionId}`)
+      const result = await tryBaileysServer(`/api/status?phone=${sessionId}`)
+
+      if (result && result.session) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            qr_code: result.session.qrCode,
+            connected: result.session.connected
+          }
+        })
+      }
 
       return NextResponse.json({
-        success: true,
-        data: result
-      })
+        success: false,
+        error: "Sessão não encontrada"
+      }, { status: 404 })
     }
 
     // DISCONNECT
     if (action === "disconnect") {
 
-      // Tenta desconectar via Baileys Server
-      if (sessionId) {
-        await tryBaileysServer(`/api/sessions/${sessionId}`, {
-          method: "DELETE"
-        })
-      }
-
+      // Limpa a sessão local
+      // Nota: O Baileys Server mantém a sessão ativa
+      // Para desconectar completamente, escaneie QR novamente
       sessions.delete(phoneNumber)
 
       return NextResponse.json({
-        success: true
+        success: true,
+        message: "Sessão removida localmente. Para desconectar do WhatsApp, reconecte com novo QR."
       })
     }
 
     // SEND MESSAGE
     if (action === "send") {
 
-      const result = await tryBaileysServer(`/api/messages`, {
+      const result = await tryBaileysServer(`/api/send`, {
         method: "POST",
         body: JSON.stringify({
-          session_id: senderNumber,
-          remote_jid: to,
-          content: message
+          phone: senderNumber,
+          to,
+          message
         })
       })
 
-      if (result) {
+      if (result && result.success) {
 
         return NextResponse.json({
           success: true,
-          data: result.data
+          data: result
         })
       }
 
@@ -214,20 +221,20 @@ export async function POST(request: NextRequest) {
 
       const { recipients, messages, senderNumbers } = body
 
-      const result = await tryBaileysServer(`/api/dispatch`, {
+      const result = await tryBaileysServer(`/api/send-bulk`, {
         method: "POST",
         body: JSON.stringify({
-          contacts: recipients,
+          recipients,
           messages,
-          sessions: senderNumbers
+          senders: senderNumbers
         })
       })
 
-      if (result) {
+      if (result && result.success) {
 
         return NextResponse.json({
           success: true,
-          data: result.data
+          data: result
         })
       }
 
