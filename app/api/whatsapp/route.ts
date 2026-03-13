@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     // CONNECT
     if (action === "connect") {
 
-      const baileysResult = await tryBaileysServer(`/api/connect`, {
+      const baileysResult = await tryBaileysServer(`/api/sessions/connect`, {
         method: "POST",
         body: JSON.stringify({
           sessionId: phoneNumber,
