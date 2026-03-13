@@ -23,13 +23,14 @@ const messageQueue: Array<{
 async function tryBaileysServer(endpoint: string, options: RequestInit = {}) {
 
   if (!BAILEYS_SERVER_URL) {
-    console.log("BAILEYS_SERVER_URL não configurado")
+    console.error("[Baileys] BAILEYS_SERVER_URL não configurado");
     return null
   }
 
   try {
 
     const url = `${BAILEYS_SERVER_URL}${endpoint}`
+    console.log("[Baileys] Fazendo requisição para:", url, "com método:", options.method || "GET")
 
     const response = await fetch(url, {
       ...options,
@@ -42,14 +43,16 @@ async function tryBaileysServer(endpoint: string, options: RequestInit = {}) {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.log("Baileys error response:", errorText)
+      console.error(`[Baileys] Erro ${response.status}:`, errorText)
       return null
     }
 
-    return await response.json()
+    const data = await response.json()
+    console.log("[Baileys] Resposta OK:", data)
+    return data
 
   } catch (error) {
-    console.log("Erro ao conectar Baileys:", error)
+    console.error("[Baileys] Erro ao conectar:", error)
     return null
   }
 }
@@ -117,14 +120,16 @@ export async function POST(request: NextRequest) {
       senderNumber
     } = body
 
+    console.log("[WhatsApp API] Ação:", action, "Dados:", { phoneNumber, sessionId, to, senderNumber })
+
     // CONNECT
     if (action === "connect") {
 
-      const baileysResult = await tryBaileysServer(`/api/sessions/connect`, {
+      const baileysResult = await tryBaileysServer(`/api/sessions`, {
         method: "POST",
         body: JSON.stringify({
-          sessionId: phoneNumber,
-          userId: "550e8400-e29b-41d4-a716-446655440000"
+          phone_number: phoneNumber,
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
         })
       })
 
@@ -132,22 +137,22 @@ export async function POST(request: NextRequest) {
 
         sessions.set(phoneNumber, {
           connected: false,
-          qrCode: baileysResult.qr,
+          qrCode: baileysResult.data?.qr_code || baileysResult.qr,
           phoneNumber,
           lastActivity: new Date()
         })
 
         return NextResponse.json({
           success: true,
-          qr: baileysResult.qr,
-          sessionId: phoneNumber
+          qr: baileysResult.data?.qr_code || baileysResult.qr,
+          sessionId: baileysResult.data?.id || phoneNumber
         })
       }
 
       return NextResponse.json({
         success: false,
         error: "Erro ao conectar Baileys"
-      })
+      }, { status: 400 })
     }
 
     // GET QR
@@ -164,12 +169,12 @@ export async function POST(request: NextRequest) {
     // DISCONNECT
     if (action === "disconnect") {
 
-      await tryBaileysServer(`/api/disconnect`, {
-        method: "POST",
-        body: JSON.stringify({
-          sessionId: phoneNumber
+      // Tenta desconectar via Baileys Server
+      if (sessionId) {
+        await tryBaileysServer(`/api/sessions/${sessionId}`, {
+          method: "DELETE"
         })
-      })
+      }
 
       sessions.delete(phoneNumber)
 
@@ -181,25 +186,27 @@ export async function POST(request: NextRequest) {
     // SEND MESSAGE
     if (action === "send") {
 
-      const result = await tryBaileysServer(`/api/send`, {
+      const result = await tryBaileysServer(`/api/messages`, {
         method: "POST",
         body: JSON.stringify({
-          sessionId: senderNumber,
-          to,
-          message
+          session_id: senderNumber,
+          remote_jid: to,
+          content: message
         })
       })
 
       if (result) {
 
         return NextResponse.json({
-          success: true
+          success: true,
+          data: result.data
         })
       }
 
       return NextResponse.json({
-        success: false
-      })
+        success: false,
+        error: "Erro ao enviar mensagem"
+      }, { status: 400 })
     }
 
     // BULK SEND
@@ -207,23 +214,27 @@ export async function POST(request: NextRequest) {
 
       const { recipients, messages, senderNumbers } = body
 
-      const result = await tryBaileysServer(`/api/send-bulk`, {
+      const result = await tryBaileysServer(`/api/dispatch`, {
         method: "POST",
         body: JSON.stringify({
-          recipients,
+          contacts: recipients,
           messages,
-          senderNumbers
+          sessions: senderNumbers
         })
       })
 
       if (result) {
 
-        return NextResponse.json(result)
+        return NextResponse.json({
+          success: true,
+          data: result.data
+        })
       }
 
       return NextResponse.json({
-        success: false
-      })
+        success: false,
+        error: "Erro ao enviar mensagens em massa"
+      }, { status: 400 })
     }
 
     return NextResponse.json({
@@ -233,11 +244,12 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
 
-    console.error("Erro API WhatsApp:", error)
+    console.error("[WhatsApp API] Erro interno:", error)
 
     return NextResponse.json({
       success: false,
-      error: "Erro interno"
+      error: error instanceof Error ? error.message : "Erro interno",
+      details: process.env.NODE_ENV === "development" ? error : undefined
     }, { status: 500 })
   }
 }
