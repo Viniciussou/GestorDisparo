@@ -106,7 +106,7 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
   // Poll for QR code
   const pollForQRCode = useCallback(async (sessionId: string, attemptCount: number = 0) => {
     const maxAttempts = 30
-
+  
     if (attemptCount >= maxAttempts) {
       showToast('Timeout aguardando QR code. Tente novamente.', 'error')
       setIsConnecting(null)
@@ -114,43 +114,29 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
       setQrCode(null)
       return
     }
-
+  
     try {
       const response = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'get_qr',
-          sessionId
-        })
+        body: JSON.stringify({ action: 'get_qr', sessionId })
       })
-
+  
       const data = await response.json()
       console.log('QR polled:', { attemptCount, data })
-
-      // Se recebeu QR code, mostra na tela
+  
       if (data.data?.qr_code) {
         setQrImage(data.data.qr_code)
         setQrCode(data.data.qr_code)
         showToast('QR Code gerado! Escaneie agora.', 'success')
-        return
-      }
-
-      // Se ainda não tem QR, continua tentando
-      if (data.success) {
+      } else {
+        // Aguardar 1s e chamar novamente
         setTimeout(() => {
           pollForQRCode(sessionId, attemptCount + 1)
         }, 1000)
-      } else {
-        console.error('Polling failed:', data)
-        showToast(data.error || 'Erro ao aguardar QR Code', 'error')
-        setIsConnecting(null)
-        setQrImage(null)
-        setQrCode(null)
       }
-
     } catch (error) {
-      console.error('Polling error:', error)
+      console.error('Erro no polling do QR:', error)
       setTimeout(() => {
         pollForQRCode(sessionId, attemptCount + 1)
       }, 1000)
@@ -691,6 +677,7 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
                   setQrCode(null)
                   setIsConnecting(null)
                   setConnectingPhone(null)
+                  isCancelled.current = true
                 }}
               >
                 Cancelar
@@ -997,7 +984,7 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
               <select
                 className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={dispatchConfig.selectedSenderIndex}
-                onChange={(e) => setDispatchConfig({ selectedSenderIndex: parseInt(e.target.value) })}
+                onChange={(e) => setDispatchConfig(prev => ({ ...prev, selectedSenderIndex: parseInt(e.target.value) }))}
                 disabled={dispatchConfig.isActive}
               >
                 <option value={-1}>Rotacionar automaticamente</option>
@@ -1016,11 +1003,14 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
               <Label>Disparos por número</Label>
               <Input
                 type="number"
-                value={dispatchConfig.dispatchesPerNumber}
-                onChange={(e) => setDispatchConfig({ dispatchesPerNumber: parseInt(e.target.value) || 30 })}
+                value={dispatchConfig.numbersPerDispatch}
+                onChange={(e) => {
+                  const value = Math.max(1, Math.min(20, parseInt(e.target.value) || 5))
+                  setDispatchConfig(prev => ({ ...prev, numbersPerDispatch: value }))
+                }}
                 disabled={dispatchConfig.isActive}
                 min={1}
-                max={100}
+                max={20}
               />
               <p className="text-xs text-muted-foreground">
                 Quantidade de disparos antes de trocar para o próximo número
