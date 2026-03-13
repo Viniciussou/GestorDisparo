@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
 
       const actualSessionId = sessionId || phoneNumber || randomUUID()
 
-      const baileysResult = await tryBaileysServer(`/api/connect`, {
+      const baileysResult = await tryBaileysServer(`/api/sessions/connect`, {
         method: "POST",
         body: JSON.stringify({
           session_id: actualSessionId,
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
     // SEND MESSAGE
     if (action === "send") {
 
-      const result = await tryBaileysServer(`/api/send`, {
+      const result = await tryBaileysServer(`/api/messages/send`, {
         method: "POST",
         body: JSON.stringify({
           phone: senderNumber,
