@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
                         auth_state: payload.data.auth_state as Record<string, unknown> || null,
                         updated_at: new Date().toISOString()
                     })
-                    .eq('id', payload.session_id)
+                    .eq('session_id', payload.session_id)
 
                 if (error) {
                     console.error('Error updating session status:', error)
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
                         status: 'disconnected',
                         updated_at: new Date().toISOString()
                     })
-                    .eq('id', payload.session_id)
+                    .eq('session_id', payload.session_id)
 
                 if (error) {
                     console.error('Error updating session status:', error)
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
                         status: 'connecting',
                         updated_at: new Date().toISOString()
                     })
-                    .eq('id', payload.session_id)
+                    .eq('session_id', payload.session_id)
 
                 if (error) {
                     console.error('Error updating QR code:', error)
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
                 const { data: session } = await supabase
                     .from('whatsapp_sessions')
                     .select('user_id')
-                    .eq('id', payload.session_id)
+                    .eq('session_id', payload.session_id)
                     .maybeSingle()
 
                 if (!session) {
@@ -259,8 +259,8 @@ export async function POST(request: NextRequest) {
                         // Get session phone
                         const { data: sessionData } = await supabase
                             .from('whatsapp_sessions')
-                            .select('phone_number')
-                            .eq('id', payload.session_id)
+                            .select('phone')
+                            .eq('session_id', payload.session_id)
                             .maybeSingle()
 
                         // Log the dispatch
@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
                                 contact_id: queueItem.contact_id,
                                 contact_phone: queueItem.contacts?.phone || '',
                                 contact_name: queueItem.contacts?.name || null,
-                                sender_phone: sessionData?.phone_number || '',
+                                sender_phone: sessionData?.phone || '',
                                 message_content: queueItem.message_content,
                                 status: messageData.status,
                                 error_message: messageData.error_message || null
