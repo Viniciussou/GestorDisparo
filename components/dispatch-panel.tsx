@@ -130,7 +130,6 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
 
       // Se recebeu QR code, mostra na tela
       if (data.data?.qr_code) {
-        console.log('QR Code received on attempt', attemptCount)
         setQrImage(data.data.qr_code)
         setQrCode(data.data.qr_code)
         showToast('QR Code gerado! Escaneie agora.', 'success')
@@ -138,8 +137,7 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
       }
 
       // Se ainda não tem QR, continua tentando
-      if (data.success && data.data?.session_id) {
-        console.log('QR not ready, polling again...')
+      if (data.success) {
         setTimeout(() => {
           pollForQRCode(sessionId, attemptCount + 1)
         }, 1000)
@@ -255,9 +253,7 @@ export function DispatchPanel({ showToast }: DispatchPanelProps) {
       console.error(error)
       showToast('Erro ao conectar com a API', 'error')
 
-    } finally {
-      setIsConnecting(null)
-    }
+    } 
   }
 
   // Desconectar número remetente
