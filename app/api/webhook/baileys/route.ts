@@ -3,12 +3,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { WebhookPayload } from '@/lib/types'
 
 export async function GET() {
-    return NextResponse.json({ status: "webhook alive" })
+    return Response.json({ status: "webhook alive" })
 }
 
-// ================================
 // Verify webhook secret
-// ================================
 function verifyWebhookSecret(request: NextRequest): boolean {
 
     const authHeader = request.headers.get("authorization")
@@ -41,9 +39,7 @@ function verifyWebhookSecret(request: NextRequest): boolean {
     return isValid
 }
 
-// ================================
-// POST webhook
-// ================================
+// POST /api/webhook/baileys - Receive events from Baileys server
 export async function POST(request: NextRequest) {
 
     if (!verifyWebhookSecret(request)) {
@@ -54,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-
+        // Verify webhook authenticity
         const payload: WebhookPayload = await request.json()
 
         if (!payload?.event) {
@@ -63,22 +59,17 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             )
         }
-
         const supabase = await createClient()
 
         switch (payload.event) {
-
-            // ====================
-            // SESSION CONNECTED
-            // ====================
             case 'session.connected': {
-
+                // Update session status to connected
                 const { error } = await supabase
                     .from('whatsapp_sessions')
                     .update({
                         status: 'connected',
                         qr_code: null,
-                        auth_state: payload.data?.auth_state || null,
+                        auth_state: payload.data.auth_state as Record<string, unknown> || null,
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', payload.session_id)
@@ -86,15 +77,11 @@ export async function POST(request: NextRequest) {
                 if (error) {
                     console.error('Error updating session status:', error)
                 }
-
                 break
             }
 
-            // ====================
-            // SESSION DISCONNECTED
-            // ====================
             case 'session.disconnected': {
-
+                // Update session status to disconnected
                 const { error } = await supabase
                     .from('whatsapp_sessions')
                     .update({
@@ -106,19 +93,14 @@ export async function POST(request: NextRequest) {
                 if (error) {
                     console.error('Error updating session status:', error)
                 }
-
                 break
             }
 
-            // ====================
-            // QR UPDATE
-            // ====================
             case 'session.qr_update': {
-
                 const { error } = await supabase
                     .from('whatsapp_sessions')
                     .update({
-                        qr_code: payload.data?.qr_code,
+                        qr_code: payload.data.qr_code,
                         status: 'connecting',
                         updated_at: new Date().toISOString()
                     })
@@ -131,11 +113,8 @@ export async function POST(request: NextRequest) {
                 break
             }
 
-            // ====================
-            // MESSAGE RECEIVED
-            // ====================
             case 'message.received': {
-
+                // Get session to find user_id
                 const { data: session } = await supabase
                     .from('whatsapp_sessions')
                     .select('user_id')
@@ -143,18 +122,24 @@ export async function POST(request: NextRequest) {
                     .maybeSingle()
 
                 if (!session) {
-                    console.error('Session not found:', payload.session_id)
+                    console.error('Session not found for message:', payload.session_id)
                     break
                 }
 
-                const messageData = payload.data as any
+                const messageData = payload.data as {
+                    remote_jid: string
+                    message_id: string
+                    content: string
+                    media_url?: string
+                    media_type?: string
+                    sender_name?: string
+                }
 
-                const phone = messageData.remote_jid
-                    ?.replace('@s.whatsapp.net', '')
-                    ?.replace('@g.us', '')
+                // Extract phone from JID
+                const phone = messageData.remote_jid.replace('@s.whatsapp.net', '').replace('@g.us', '')
 
+                // Find or create contact
                 let contactId: string | null = null
-
                 const { data: existingContact } = await supabase
                     .from('contacts')
                     .select('id')
@@ -163,18 +148,14 @@ export async function POST(request: NextRequest) {
                     .maybeSingle()
 
                 if (existingContact) {
-
                     contactId = existingContact.id
-
+                    // Update last contact time
                     await supabase
                         .from('contacts')
-                        .update({
-                            last_contact_at: new Date().toISOString()
-                        })
+                        .update({ last_contact_at: new Date().toISOString() })
                         .eq('id', contactId)
-
                 } else {
-
+                    // Create new contact
                     const { data: newContact } = await supabase
                         .from('contacts')
                         .insert({
@@ -191,6 +172,7 @@ export async function POST(request: NextRequest) {
                     }
                 }
 
+                // Save incoming message
                 const { error: messageError } = await supabase
                     .from('messages')
                     .insert({
@@ -207,21 +189,41 @@ export async function POST(request: NextRequest) {
                     })
 
                 if (messageError) {
-                    console.error('Error saving message:', messageError)
+                    console.error('Error saving incoming message:', messageError)
                 }
 
+                // Check if there are pending dispatches for this contact and pause them
+                // (pause_on_response feature)
+                if (contactId) {
+                    const { data: config } = await supabase
+                        .from('dispatch_configs')
+                        .select('pause_on_response')
+                        .eq('user_id', session.user_id)
+                        .eq('is_active', true)
+                        .limit(1)
+                        .maybeSingle()
+
+                    if (config?.pause_on_response) {
+                        await supabase
+                            .from('dispatch_queue')
+                            .update({ status: 'cancelled' })
+                            .eq('contact_id', contactId)
+                            .eq('status', 'pending')
+                    }
+                }
                 break
             }
 
-            // ====================
-            // MESSAGE SENT
-            // ====================
             case 'message.sent': {
-
-                const messageData = payload.data as any
+                // Update message status
+                const messageData = payload.data as {
+                    message_db_id?: string
+                    message_id: string
+                    status: 'sent' | 'failed'
+                    error_message?: string
+                }
 
                 if (messageData.message_db_id) {
-
                     await supabase
                         .from('messages')
                         .update({
@@ -233,50 +235,82 @@ export async function POST(request: NextRequest) {
                         .eq('id', messageData.message_db_id)
                 }
 
+                // Update dispatch queue if this was a queued message
+                if (payload.data.queue_id) {
+                    const queueId = payload.data.queue_id as string
+
+                    // Get queue item details
+                    const { data: queueItem } = await supabase
+                        .from('dispatch_queue')
+                        .select('*, contacts(phone, name)')
+                        .eq('id', queueId)
+                        .maybeSingle()
+
+                    if (queueItem) {
+                        // Update queue status
+                        await supabase
+                            .from('dispatch_queue')
+                            .update({
+                                status: messageData.status,
+                                processed_at: new Date().toISOString()
+                            })
+                            .eq('id', queueId)
+
+                        // Get session phone
+                        const { data: sessionData } = await supabase
+                            .from('whatsapp_sessions')
+                            .select('phone_number')
+                            .eq('id', payload.session_id)
+                            .maybeSingle()
+
+                        // Log the dispatch
+                        await supabase
+                            .from('dispatch_logs')
+                            .insert({
+                                user_id: queueItem.user_id,
+                                queue_id: queueId,
+                                session_id: payload.session_id,
+                                contact_id: queueItem.contact_id,
+                                contact_phone: queueItem.contacts?.phone || '',
+                                contact_name: queueItem.contacts?.name || null,
+                                sender_phone: sessionData?.phone_number || '',
+                                message_content: queueItem.message_content,
+                                status: messageData.status,
+                                error_message: messageData.error_message || null
+                            })
+                    }
+                }
                 break
             }
 
-            // ====================
-            // MESSAGE STATUS
-            // ====================
             case 'message.delivered':
             case 'message.read': {
+                // Update message status
+                const messageData = payload.data as { message_id: string }
 
-                const messageData = payload.data as any
-
-                const status =
-                    payload.event === 'message.delivered'
-                        ? 'delivered'
-                        : 'read'
+                const status = payload.event === 'message.delivered' ? 'delivered' : 'read'
 
                 await supabase
                     .from('messages')
-                    .update({
-                        status,
-                        updated_at: new Date().toISOString()
-                    })
+                    .update({ status, updated_at: new Date().toISOString() })
                     .eq('message_id', messageData.message_id)
 
+                // Also update dispatch log if exists
+                await supabase
+                    .from('dispatch_logs')
+                    .update({ status })
+                    .eq('session_id', payload.session_id)
+                    .match({ status: status === 'read' ? 'delivered' : 'sent' })
                 break
             }
 
             default:
                 console.warn('Unknown webhook event:', payload.event)
-
         }
 
         return NextResponse.json({ success: true })
-
     } catch (error) {
-
         console.error('Webhook error:', error)
-
-        return NextResponse.json(
-            {
-                error: 'Server error',
-                message: 'Unexpected error'
-            },
-            { status: 500 }
-        )
+        return NextResponse.json({ error: 'Server error', message: 'An unexpected error occurred' }, { status: 500 })
     }
 }
