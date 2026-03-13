@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 
 const BAILEYS_SERVER_URL = process.env.BAILEYS_SERVER_URL
 const BAILEYS_SERVER_SECRET = process.env.BAILEYS_SERVER_SECRET
@@ -125,9 +126,12 @@ export async function POST(request: NextRequest) {
     // CONNECT
     if (action === "connect") {
 
+      const actualSessionId = sessionId || phoneNumber || randomUUID()
+
       const baileysResult = await tryBaileysServer(`/api/connect`, {
         method: "POST",
         body: JSON.stringify({
+          session_id: actualSessionId,
           phone_number: phoneNumber,
           user_id: "550e8400-e29b-41d4-a716-446655440000"
         })
@@ -135,7 +139,7 @@ export async function POST(request: NextRequest) {
 
       if (baileysResult) {
 
-        sessions.set(phoneNumber, {
+        sessions.set(actualSessionId, {
           connected: false,
           qrCode: baileysResult.qr || baileysResult.data?.qr_code,
           phoneNumber,
@@ -145,7 +149,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           qr: baileysResult.qr || baileysResult.data?.qr_code,
-          sessionId: phoneNumber
+          sessionId: actualSessionId
         })
       }
 
