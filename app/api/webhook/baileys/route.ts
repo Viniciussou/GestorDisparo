@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { WebhookPayload } from '@/lib/types'
 
 export async function GET() {
-  return NextResponse.json({ status: "webhook alive" })
+    return NextResponse.json({ status: "webhook alive" })
 }
 
 // ================================
@@ -11,38 +11,34 @@ export async function GET() {
 // ================================
 function verifyWebhookSecret(request: NextRequest): boolean {
 
-  const receivedSecret =
-    request.headers.get('authorization') ||
-    request.headers.get('x-webhook-secret') ||
-    request.headers.get('x-server-secret')
+    const authHeader = request.headers.get("authorization")
 
-  const expectedSecret =
-    process.env.BAILEYS_SERVER_SECRET ||
-    process.env.SERVER_SECRET ||
-    process.env.NEXT_PUBLIC_BAILEYS_SERVER_SECRET
+    const expectedSecret =
+        process.env.BAILEYS_SERVER_SECRET ||
+        process.env.SERVER_SECRET
 
-  if (!expectedSecret) {
-    console.error('[Webhook] BAILEYS_SERVER_SECRET is not configured')
-    return false
-  }
+    if (!expectedSecret) {
+        console.error("[Webhook] Secret not configured")
+        return false
+    }
 
-  if (!receivedSecret) {
-    console.error('[Webhook] Secret missing in request headers')
-    return false
-  }
+    if (!authHeader) {
+        console.error("[Webhook] Missing Authorization header")
+        return false
+    }
 
-  const cleanSecret = receivedSecret.replace('Bearer ', '')
+    const token = authHeader.replace("Bearer ", "")
 
-  const isValid = cleanSecret === expectedSecret
+    const isValid = token === expectedSecret
 
-  if (!isValid) {
-    console.error('[Webhook] Secret verification failed', {
-      receivedSecret: '***',
-      expectedSecretExists: !!expectedSecret
-    })
-  }
+    if (!isValid) {
+        console.error("[Webhook] Secret verification failed", {
+            receivedSecret: "***",
+            expectedSecretExists: true
+        })
+    }
 
-  return isValid
+    return isValid
 }
 
 // ================================
@@ -50,237 +46,237 @@ function verifyWebhookSecret(request: NextRequest): boolean {
 // ================================
 export async function POST(request: NextRequest) {
 
-  if (!verifyWebhookSecret(request)) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    )
-  }
-
-  try {
-
-    const payload: WebhookPayload = await request.json()
-
-    if (!payload?.event) {
-      return NextResponse.json(
-        { error: "Invalid payload" },
-        { status: 400 }
-      )
+    if (!verifyWebhookSecret(request)) {
+        return NextResponse.json(
+            { error: "Unauthorized" },
+            { status: 401 }
+        )
     }
 
-    const supabase = await createClient()
+    try {
 
-    switch (payload.event) {
+        const payload: WebhookPayload = await request.json()
 
-      // ====================
-      // SESSION CONNECTED
-      // ====================
-      case 'session.connected': {
-
-        const { error } = await supabase
-          .from('whatsapp_sessions')
-          .update({
-            status: 'connected',
-            qr_code: null,
-            auth_state: payload.data?.auth_state || null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', payload.session_id)
-
-        if (error) {
-          console.error('Error updating session status:', error)
+        if (!payload?.event) {
+            return NextResponse.json(
+                { error: "Invalid payload" },
+                { status: 400 }
+            )
         }
 
-        break
-      }
+        const supabase = await createClient()
 
-      // ====================
-      // SESSION DISCONNECTED
-      // ====================
-      case 'session.disconnected': {
+        switch (payload.event) {
 
-        const { error } = await supabase
-          .from('whatsapp_sessions')
-          .update({
-            status: 'disconnected',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', payload.session_id)
+            // ====================
+            // SESSION CONNECTED
+            // ====================
+            case 'session.connected': {
 
-        if (error) {
-          console.error('Error updating session status:', error)
+                const { error } = await supabase
+                    .from('whatsapp_sessions')
+                    .update({
+                        status: 'connected',
+                        qr_code: null,
+                        auth_state: payload.data?.auth_state || null,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', payload.session_id)
+
+                if (error) {
+                    console.error('Error updating session status:', error)
+                }
+
+                break
+            }
+
+            // ====================
+            // SESSION DISCONNECTED
+            // ====================
+            case 'session.disconnected': {
+
+                const { error } = await supabase
+                    .from('whatsapp_sessions')
+                    .update({
+                        status: 'disconnected',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', payload.session_id)
+
+                if (error) {
+                    console.error('Error updating session status:', error)
+                }
+
+                break
+            }
+
+            // ====================
+            // QR UPDATE
+            // ====================
+            case 'session.qr_update': {
+
+                const { error } = await supabase
+                    .from('whatsapp_sessions')
+                    .update({
+                        qr_code: payload.data?.qr_code,
+                        status: 'connecting',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', payload.session_id)
+
+                if (error) {
+                    console.error('Error updating QR code:', error)
+                }
+
+                break
+            }
+
+            // ====================
+            // MESSAGE RECEIVED
+            // ====================
+            case 'message.received': {
+
+                const { data: session } = await supabase
+                    .from('whatsapp_sessions')
+                    .select('user_id')
+                    .eq('id', payload.session_id)
+                    .maybeSingle()
+
+                if (!session) {
+                    console.error('Session not found:', payload.session_id)
+                    break
+                }
+
+                const messageData = payload.data as any
+
+                const phone = messageData.remote_jid
+                    ?.replace('@s.whatsapp.net', '')
+                    ?.replace('@g.us', '')
+
+                let contactId: string | null = null
+
+                const { data: existingContact } = await supabase
+                    .from('contacts')
+                    .select('id')
+                    .eq('user_id', session.user_id)
+                    .eq('phone', phone)
+                    .maybeSingle()
+
+                if (existingContact) {
+
+                    contactId = existingContact.id
+
+                    await supabase
+                        .from('contacts')
+                        .update({
+                            last_contact_at: new Date().toISOString()
+                        })
+                        .eq('id', contactId)
+
+                } else {
+
+                    const { data: newContact } = await supabase
+                        .from('contacts')
+                        .insert({
+                            user_id: session.user_id,
+                            phone,
+                            name: messageData.sender_name || null,
+                            status: 'active'
+                        })
+                        .select('id')
+                        .maybeSingle()
+
+                    if (newContact) {
+                        contactId = newContact.id
+                    }
+                }
+
+                const { error: messageError } = await supabase
+                    .from('messages')
+                    .insert({
+                        user_id: session.user_id,
+                        session_id: payload.session_id,
+                        contact_id: contactId,
+                        remote_jid: messageData.remote_jid,
+                        message_id: messageData.message_id,
+                        direction: 'incoming',
+                        content: messageData.content,
+                        media_url: messageData.media_url || null,
+                        media_type: messageData.media_type || null,
+                        status: 'delivered'
+                    })
+
+                if (messageError) {
+                    console.error('Error saving message:', messageError)
+                }
+
+                break
+            }
+
+            // ====================
+            // MESSAGE SENT
+            // ====================
+            case 'message.sent': {
+
+                const messageData = payload.data as any
+
+                if (messageData.message_db_id) {
+
+                    await supabase
+                        .from('messages')
+                        .update({
+                            status: messageData.status,
+                            message_id: messageData.message_id,
+                            error_message: messageData.error_message || null,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', messageData.message_db_id)
+                }
+
+                break
+            }
+
+            // ====================
+            // MESSAGE STATUS
+            // ====================
+            case 'message.delivered':
+            case 'message.read': {
+
+                const messageData = payload.data as any
+
+                const status =
+                    payload.event === 'message.delivered'
+                        ? 'delivered'
+                        : 'read'
+
+                await supabase
+                    .from('messages')
+                    .update({
+                        status,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('message_id', messageData.message_id)
+
+                break
+            }
+
+            default:
+                console.warn('Unknown webhook event:', payload.event)
+
         }
 
-        break
-      }
+        return NextResponse.json({ success: true })
 
-      // ====================
-      // QR UPDATE
-      // ====================
-      case 'session.qr_update': {
+    } catch (error) {
 
-        const { error } = await supabase
-          .from('whatsapp_sessions')
-          .update({
-            qr_code: payload.data?.qr_code,
-            status: 'connecting',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', payload.session_id)
+        console.error('Webhook error:', error)
 
-        if (error) {
-          console.error('Error updating QR code:', error)
-        }
-
-        break
-      }
-
-      // ====================
-      // MESSAGE RECEIVED
-      // ====================
-      case 'message.received': {
-
-        const { data: session } = await supabase
-          .from('whatsapp_sessions')
-          .select('user_id')
-          .eq('id', payload.session_id)
-          .maybeSingle()
-
-        if (!session) {
-          console.error('Session not found:', payload.session_id)
-          break
-        }
-
-        const messageData = payload.data as any
-
-        const phone = messageData.remote_jid
-          ?.replace('@s.whatsapp.net', '')
-          ?.replace('@g.us', '')
-
-        let contactId: string | null = null
-
-        const { data: existingContact } = await supabase
-          .from('contacts')
-          .select('id')
-          .eq('user_id', session.user_id)
-          .eq('phone', phone)
-          .maybeSingle()
-
-        if (existingContact) {
-
-          contactId = existingContact.id
-
-          await supabase
-            .from('contacts')
-            .update({
-              last_contact_at: new Date().toISOString()
-            })
-            .eq('id', contactId)
-
-        } else {
-
-          const { data: newContact } = await supabase
-            .from('contacts')
-            .insert({
-              user_id: session.user_id,
-              phone,
-              name: messageData.sender_name || null,
-              status: 'active'
-            })
-            .select('id')
-            .maybeSingle()
-
-          if (newContact) {
-            contactId = newContact.id
-          }
-        }
-
-        const { error: messageError } = await supabase
-          .from('messages')
-          .insert({
-            user_id: session.user_id,
-            session_id: payload.session_id,
-            contact_id: contactId,
-            remote_jid: messageData.remote_jid,
-            message_id: messageData.message_id,
-            direction: 'incoming',
-            content: messageData.content,
-            media_url: messageData.media_url || null,
-            media_type: messageData.media_type || null,
-            status: 'delivered'
-          })
-
-        if (messageError) {
-          console.error('Error saving message:', messageError)
-        }
-
-        break
-      }
-
-      // ====================
-      // MESSAGE SENT
-      // ====================
-      case 'message.sent': {
-
-        const messageData = payload.data as any
-
-        if (messageData.message_db_id) {
-
-          await supabase
-            .from('messages')
-            .update({
-              status: messageData.status,
-              message_id: messageData.message_id,
-              error_message: messageData.error_message || null,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', messageData.message_db_id)
-        }
-
-        break
-      }
-
-      // ====================
-      // MESSAGE STATUS
-      // ====================
-      case 'message.delivered':
-      case 'message.read': {
-
-        const messageData = payload.data as any
-
-        const status =
-          payload.event === 'message.delivered'
-            ? 'delivered'
-            : 'read'
-
-        await supabase
-          .from('messages')
-          .update({
-            status,
-            updated_at: new Date().toISOString()
-          })
-          .eq('message_id', messageData.message_id)
-
-        break
-      }
-
-      default:
-        console.warn('Unknown webhook event:', payload.event)
-
+        return NextResponse.json(
+            {
+                error: 'Server error',
+                message: 'Unexpected error'
+            },
+            { status: 500 }
+        )
     }
-
-    return NextResponse.json({ success: true })
-
-  } catch (error) {
-
-    console.error('Webhook error:', error)
-
-    return NextResponse.json(
-      {
-        error: 'Server error',
-        message: 'Unexpected error'
-      },
-      { status: 500 }
-    )
-  }
 }
